@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PSX Daily Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      min-height: 100vh;
+      padding: 32px 16px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    header h1 {
+      font-size: 1.9rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    header p {
+      color: #8b949e;
+      margin-top: 6px;
+      font-size: 0.9rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      max-width: 1000px;
+      margin: 0 auto 40px;
+    }
+
+    @media (max-width: 640px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .gainers .card-header { color: #3fb950; background: rgba(63,185,80,0.08); }
+    .losers .card-header  { color: #f85149; background: rgba(248,81,73,0.08); }
+    .media .card-header   { color: #79c0ff; background: rgba(121,192,255,0.08); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+
+    th {
+      padding: 10px 16px;
+      text-align: left;
+      color: #8b949e;
+      font-weight: 500;
+      border-bottom: 1px solid #21262d;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+    }
+
+    td {
+      padding: 10px 16px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1c2128; }
+
+    .symbol { font-weight: 600; color: #e6edf3; }
+    .price  { color: #8b949e; }
+    .up     { color: #3fb950; font-weight: 600; }
+    .down   { color: #f85149; font-weight: 600; }
+
+    .media-section {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .media-section .card { margin-bottom: 0; }
+
+    .release-item {
+      padding: 14px 20px;
+      border-bottom: 1px solid #21262d;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .release-item:last-child { border-bottom: none; }
+
+    .release-title {
+      font-size: 0.9rem;
+      color: #e6edf3;
+      text-decoration: none;
+      line-height: 1.5;
+    }
+
+    .release-title:hover { color: #79c0ff; }
+
+    .release-date {
+      font-size: 0.78rem;
+      color: #8b949e;
+      white-space: nowrap;
+      margin-top: 2px;
+    }
+
+    .empty {
+      padding: 24px 20px;
+      color: #8b949e;
+      font-size: 0.88rem;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .badge-green { background: rgba(63,185,80,0.15); color: #3fb950; }
+    .badge-red   { background: rgba(248,81,73,0.15);  color: #f85149; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>PSX Daily Tracker</h1>
+    <p id="updated">Loading...</p>
+  </header>
+
+  <div class="grid">
+    <div class="card gainers">
+      <div class="card-header">▲ Top 10 Gainers</div>
+      <table>
+        <thead>
+          <tr><th>Symbol</th><th>Price</th><th>Change</th><th>%</th></tr>
+        </thead>
+        <tbody id="gainers-body"></tbody>
+      </table>
+    </div>
+
+    <div class="card losers">
+      <div class="card-header">▼ Top 10 Losers</div>
+      <table>
+        <thead>
+          <tr><th>Symbol</th><th>Price</th><th>Change</th><th>%</th></tr>
+        </thead>
+        <tbody id="losers-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="media-section">
+    <div class="card media">
+      <div class="card-header">📰 Media Releases — Last 5 Days</div>
+      <div id="media-body"></div>
+    </div>
+  </div>
+
+  <script>
+    async function load() {
+      const res = await fetch('data.json?t=' + Date.now());
+      const data = await res.json();
+
+      document.getElementById('updated').textContent = 'Last updated: ' + data.updated_at;
+
+      renderMovers('gainers-body', data.gainers, true);
+      renderMovers('losers-body', data.losers, false);
+      renderMedia('media-body', data.media_releases);
+    }
+
+    function renderMovers(id, rows, isGainer) {
+      const tbody = document.getElementById(id);
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">No data yet — runs at 2 PM PKT on weekdays.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td class="symbol">${r.symbol}</td>
+          <td class="price">${r.price}</td>
+          <td class="${isGainer ? 'up' : 'down'}">${r.change}</td>
+          <td><span class="badge ${isGainer ? 'badge-green' : 'badge-red'}">${r.change_pct}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    function renderMedia(id, releases) {
+      const el = document.getElementById(id);
+      if (!releases || releases.length === 0) {
+        el.innerHTML = '<div class="empty">No media releases yet — runs at 2 PM PKT on weekdays.</div>';
+        return;
+      }
+      el.innerHTML = releases.map(r => `
+        <div class="release-item">
+          <div>
+            ${r.link
+              ? `<a class="release-title" href="${r.link}" target="_blank" rel="noopener">${r.title}</a>`
+              : `<span class="release-title">${r.title}</span>`
+            }
+          </div>
+          <div class="release-date">${r.date}</div>
+        </div>
+      `).join('');
+    }
+
+    load();
+  </script>
+</body>
+</html>
